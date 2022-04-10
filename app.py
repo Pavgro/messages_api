@@ -6,7 +6,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from functools import wraps
 
-
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisissecret'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///messages.db'
@@ -68,18 +67,6 @@ def get_all_users(current_user):
     return jsonify({'users': output})
 
 
-@app.route('/users/<public_id>', methods=['GET'])
-@token_required
-def get_user(current_user):
-
-    user_data ={}
-    user_data['name'] = current_user.name
-    user_data['password'] = current_user.password
-    user_data['public_id'] = current_user.public_id
-    user_data['id'] = current_user.id
-    return jsonify({"user": user_data})
-
-
 @app.route('/users', methods=['POST'])
 def register_user():
     data = request.get_json()
@@ -109,17 +96,6 @@ def login():
 
     return make_response('Could not verify', '401', {'WWW-Authenticate': 'Basic realm = "Login required'})
 
-#
-# id = db.Column(db.Integer, primary_key=True)
-#     sender_name = db.Column(db.String(50))
-#     sender_id = db.Column(db.Integer)
-#     receiver_name = db.Column(db.String(50))
-#     receiver_id = db.Column(db.Integer)
-#     message = db.Column(db.Text)
-#     subject = db.Column(db.String(100))
-#     creation_date = db.Column(db.DateTime, default=datetime.utcnow())
-#     read = db.Column(db.Boolean)
-# User(public_id=str(uuid.uuid4()), name=data['name'], password=hashed_password, id=data["id"])
 
 @app.route('/messages', methods=['POST'])
 @token_required
@@ -173,11 +149,12 @@ def get_unread(current_user):
     return jsonify({f'{current_user.name} unread messages': output})
 
 
-
 @app.route('/messages/<message_id>', methods=['GET'])
 @token_required
 def read_message(current_user, message_id):
     message = Messages.query.filter_by(receiver_id=current_user.id, id=message_id).first()
+    if not message:
+        return jsonify({'message': 'message not found'})
     data = {}
     data['sender_id'] = message.sender_id
     data['sender_name'] = message.sender_name
@@ -193,7 +170,14 @@ def read_message(current_user, message_id):
 @app.route('/messages/<message_id>', methods=['DELETE'])
 @token_required
 def delete_message(current_user, message_id):
-    return ''
+    message = Messages.query.filter_by(receiver_id=current_user.id, id=message_id).first()
+    if not message:
+        return jsonify({'message': 'Message not found!'})
+
+    db.session.delete(message)
+    db.session.commit()
+
+    return jsonify({'message': 'message deleted successfully'})
 
 
 if __name__ == '__main__':
